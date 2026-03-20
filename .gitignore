@@ -2,3 +2,10 @@ results/
 model/__pycache__/
 .DS_Store
 model/.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+.env/
