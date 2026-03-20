@@ -1,5 +1,6 @@
 from .utils import *
 from .ElementExtractor import *
+import os
 
 def load_parsed_result_into_self(self, parsed_result):
     needed_list = [
@@ -75,7 +76,10 @@ def parse_story_and_question(self):
     if self.verbose:
         print(self.tab + f"{self.choices}")
 
-    if self.model_name == "automated":
+    forced_inf_var = os.getenv("AUTOTOM_FORCE_INF_VAR", "").strip()
+    if forced_inf_var:
+        self.inf_var_name = forced_inf_var
+    elif self.model_name == "automated":
         possible_vars = ["Belief", "Goal"]
         if "BigToM" in self.dataset_name:
             possible_vars.append("Action")
@@ -117,4 +121,3 @@ def parse_story_and_question(self):
     save_parsed_result(info, self.model_name, self.episode_name)
     
     return info
-

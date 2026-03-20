@@ -4,8 +4,9 @@ from .ElementExtractor import *
 from .DataLoader import *
 import os
 from copy import deepcopy
+from pathlib import Path
 
-prefix_path = '/mmfs1/gscratch/socialrl/kjha/automaticity/baselines/AutoToM/model'
+prefix_path = str(Path(__file__).resolve().parent)
 class TimeLine:
     def __init__(
         self,

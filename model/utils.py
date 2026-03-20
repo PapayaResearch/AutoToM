@@ -13,19 +13,31 @@ import transformers
 import torch
 import time
 import glob
+from pathlib import Path
+import threading
 
-path_prefix = '/mmfs1/gscratch/socialrl/kjha/automaticity/baselines/AutoToM/model'
+path_prefix = str(Path(__file__).resolve().parent)
 
-current_model_name = os.environ['CURRENT_MODEL_NAME']
-pipeline = transformers.pipeline(
-    "text-generation",
-    model=current_model_name,
-    model_kwargs={"torch_dtype": torch.bfloat16},
-    device_map='auto',
-    trust_remote_code=True,
-    # max_num_batched_tokens=40000,
-    # token=API_TOKEN,
-)
+_pipeline = None
+_pipeline_model_id = None
+_pipeline_lock = threading.Lock()
+
+
+def _get_local_pipeline(model_id: str):
+    """Lazily initialize a local HF pipeline only when a non-OpenAI model is requested."""
+    global _pipeline, _pipeline_model_id
+    with _pipeline_lock:
+        if _pipeline is not None and _pipeline_model_id == model_id:
+            return _pipeline
+        _pipeline = transformers.pipeline(
+            "text-generation",
+            model=model_id,
+            model_kwargs={"torch_dtype": torch.bfloat16},
+            device_map="auto",
+            trust_remote_code=True,
+        )
+        _pipeline_model_id = model_id
+    return _pipeline
 
 
 def get_info(s, num=0):
@@ -83,7 +95,7 @@ def gpt_request_multimodal(
     base64_images,
     temperature=0.0,
     max_tokens=3000,
-    model="gpt-4.1-nano",
+    model="gpt-4o",
     hypo=False,
     verbose=False,
 ):
@@ -152,7 +164,7 @@ def gpt_request_multimodal(
 
 
 def llm_request(
-    prompt, temperature=0.0, max_tokens=3000, model="gpt-4.1-nano", hypo=False, verbose=False
+    prompt, temperature=0.0, max_tokens=3000, model="gpt-4o", hypo=False, verbose=False
 ):
     if "gpt" in model:
         return gpt_request(
@@ -170,14 +182,7 @@ def llm_request(
 def llama_request(
     prompt, model_id="meta-llama/Llama-3.1-8B-Instruct", max_tokens=200
 ):
-    # API_TOKEN = os.environ["LLAMA_API_KEY"]
-    # if torch.cuda.is_available():
-    #     device = 0  # Assuming you want to use the first GPU
-    #     print("GPU Available: Using GPU")
-    # else:
-    #     device = -1  # Use CPU
-    #     print("GPU Not Available: Using CPU")
-
+    pipeline = _get_local_pipeline(model_id)
 
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
@@ -198,7 +203,7 @@ def gpt_request(
     prompt,
     temperature=0.0,
     max_tokens=3000,
-    model="gpt-4.1-nano",
+    model="gpt-4o",
     hypo=False,
     verbose=False,
     message_role="user",

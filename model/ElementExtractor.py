@@ -3,8 +3,10 @@ from .utils import *
 from .probs import *
 from copy import deepcopy
 import json
+import os
+from pathlib import Path
 
-prefix_path = "/mmfs1/gscratch/socialrl/kjha/automaticity/baselines/AutoToM/model"
+prefix_path = str(Path(__file__).resolve().parent)
 
 class Variable:
     def __init__(
@@ -143,11 +145,12 @@ def hypothesis_generation_no_observation(info, character, llm, verbose=False):
 
 
 def repetitive_hypothesis_reduction(hypo_c, llm):
-    with open(
-        f"{prefix_path}/prompts/prompt_dir/prompt_model/repetitive_hypo_reduction.txt",
-        "r",
-        encoding="utf-8",
-    ) as prompt_file:
+    prompt_path = (
+        f"{prefix_path}/prompts/prompt_dir/prompt_model/repetitive_hypo_reduction.txt"
+    )
+    if not os.path.exists(prompt_path):
+        return hypo_c
+    with open(prompt_path, "r", encoding="utf-8") as prompt_file:
         prompt_template = prompt_file.read().strip()
         prompt = prompt_template.replace("[Hypotheses]", f"{hypo_c}")
         resp, cost = llm_request(prompt, temperature=0.0, hypo=True, model=llm)
@@ -309,7 +312,7 @@ def extraction(story, character, element_name, llm, dataset_name, choices=None):
 
 def get_context(story, llm):
     with open(
-        f"{prefix_path}/prompts/prompt_dir/prompt_model/find_context.txt", "r", encoding="utf-8"
+        f"{prefix_path}/prompts/prompt_dir/prompt_model/find_Context.txt", "r", encoding="utf-8"
     ) as prompt_file:
         prompt_template = prompt_file.read().strip()
     prompt = prompt_template.replace("[Story]", f"Story: {story}")
@@ -1347,7 +1350,7 @@ def get_answer_memory_questions(story, question, choices, llm):
 
 def split_sentences(story, llm):
     with open(
-        f"{prefix_path}/prompt_dir/prompt_model/split_sentences.txt", "r", encoding="utf-8"
+        f"{prefix_path}/prompts/prompt_dir/prompt_model/split_sentences.txt", "r", encoding="utf-8"
     ) as prompt_file:
         prompt_template = prompt_file.read().strip()
     prompt = prompt_template.replace("[Story]", f"Story: {story}")

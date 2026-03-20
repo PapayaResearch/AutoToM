@@ -1,9 +1,9 @@
 import numpy as np
 from copy import deepcopy, copy
-from baselines.AutoToM.model.probs import get_logits, get_likelihood
+from .probs import get_logits, get_likelihood
 import itertools
-from baselines.AutoToM.model.ElementExtractor import *
-from baselines.AutoToM.model.utils import *
+from .ElementExtractor import *
+from .utils import *
 
 """
     Creates a BayesianInferenceModel class that will setup and run the Bayesian inference 

@@ -1,7 +1,8 @@
 from .utils import *
 from .ElementExtractor import *
+from pathlib import Path
 
-prefix_path = "/mmfs1/gscratch/socialrl/kjha/automaticity/baselines/AutoToM"
+prefix_path = str(Path(__file__).resolve().parents[1])
 
 def get_nested_states(
     self,
@@ -152,7 +153,6 @@ def save_nested_results(self, i, s, prob, story_now, nested_question, nested_cho
     }
     df = pd.DataFrame([data])
     
-    scsv_path = f'{prefix_path}/results/nested_results/{self.episode_name}_{self.first_agent_name}.csv'
+    csv_path = f'{prefix_path}/results/nested_results/{self.episode_name}_{self.first_agent_name}.csv'
     
     df.to_csv(csv_path, mode='a', header=not os.path.exists(csv_path), index=False)
-

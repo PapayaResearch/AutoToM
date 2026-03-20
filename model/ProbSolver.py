@@ -4,11 +4,11 @@ from .utils import *
 from .DataLoader import *
 from .Timeline import *
 from .model_adjustment import *
-import baselines.AutoToM.model.probs as probs
-import baselines.AutoToM.model.NodeResultTracker as NodeResultTracker
-import baselines.AutoToM.model.TimestepInference as TimestepInference
-import baselines.AutoToM.model.ProblemParser as ProblemParser
-import baselines.AutoToM.model.Nested as Nested
+from . import probs
+from . import NodeResultTracker
+from . import TimestepInference
+from . import ProblemParser
+from . import Nested
 import numpy as np
 import time
 from scipy.stats import entropy

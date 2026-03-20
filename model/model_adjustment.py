@@ -2,38 +2,12 @@ import pandas as pd
 from scipy.stats import entropy
 import openai
 import copy
-import torch
 from openai import OpenAI
 import os
-# Use a pipeline as a high-level helper
-from transformers import pipeline, AutoTokenizer
-
-# Load model across multiple GPUs
-model_name = os.environ['CURRENT_MODEL_NAME']
-from .utils import pipeline as pipe
-# pipe = pipeline(
-#     "text-generation", 
-#     model=model_name, 
-#     torch_dtype=torch.bfloat16,
-#     device_map="auto",  # This will automatically distribute the model across available GPUs
-#     trust_remote_code=True,
-#     # max_num_batched_tokens=40000,
-
-# )
-# Get tokenizer from pipeline
-tokenizer = pipe.tokenizer
-
-# Alternatively, to specify specific devices:
-# pipe = pipeline(
-#     "text-generation", 
-#     model="meta-llama/Llama-3.1-8B", 
-#     torch_dtype=torch.bfloat16,
-#     device_map={0: [0, 1, 2, 3], 1: [4, 5, 6, 7]}  # Map specific layers to specific GPUs
-# )
 
 benefit_threshold = 0.02
 # terminate_threshold = 0.6
-utility_terminate_threshold = -0.673
+utility_terminate_threshold = -2.0
 
 model_space = [
     ['State', 'Observation', 'Belief', 'Action', 'Goal'],   # POMDP
@@ -49,6 +23,15 @@ model_space = [
 
 all_variables = ["State", "Observation", "Belief", "Action", "Goal", "Utterance", "Belief of Goal"]
 
+
+def _termination_metrics(results):
+    probs = list(results)
+    ent = entropy(probs)
+    utility = -ent
+    max_prob = max(probs) if probs else float("nan")
+    margin = utility - utility_terminate_threshold
+    return utility, ent, max_prob, margin
+
 def model_discovery(start_timestep, all_timesteps, verbose, time_variables, previous_belief, inf_agent_name, inf_var_name, estimation_dictionary, \
                         infer_last_timestamp, no_observation_hypothesis, variable_values_with_time, all_probs, answerfunc, argmax, argmin, save_belief_probs, model_name, \
                         episode_name, infer_belief_at_timestamp, belief_name, get_variables_at_time, mmtom_get_variables_at_time, choices, K, llm, hypo_llm, hypo_method, full, \
@@ -61,6 +44,12 @@ def model_discovery(start_timestep, all_timesteps, verbose, time_variables, prev
                         preproposed_ob_hypos, last_state, inf_agent_action, assigned_models, dataset_name, states, actions, question, precomputed_states, model_variables, self)
     
     print("Initial Terminate: ", terminate)
+    utility, ent, max_prob, margin = _termination_metrics(results)
+    print(
+        f"Terminate metrics: utility={utility:.4f} "
+        f"(threshold={utility_terminate_threshold:.4f}, margin={margin:.4f}) "
+        f"max_prob={max_prob:.4f} entropy={ent:.4f}"
+    )
 
     if no_model_adjustment:
         return results, terminate, assigned_models, model_variables
@@ -235,6 +224,14 @@ def Bayesian_inference(start_timestep, all_timesteps, verbose, time_variables, p
             if terminate is True:
                 save_belief_probs(all_probs, model_name, episode_name)
                 # save_all_estimations(all_prob_estimations, self.episode_name)
+            max_prob = max(results) if len(results) > 0 else float("nan")
+            margin = utility - utility_terminate_threshold
+            print(
+                f"Terminate check @start={start_timestep} final_t={i}: "
+                f"utility={utility:.4f} threshold={utility_terminate_threshold:.4f} "
+                f"margin={margin:.4f} max_prob={max_prob:.4f} "
+                f"entropy={-utility:.4f} terminate={terminate}"
+            )
             
             return results, terminate, model_variables
 
@@ -257,18 +254,14 @@ def gpt_call(prompt):
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": prompt},
     ]
-    
-    if "gpt" in model_name:
-        client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-        response = client.chat.completions.create(
-            model="gpt-4.1-nano", 
-            messages=messages,
-            temperature=0,
-        )
-        return response.choices[0].message.content
-    else:
-        response = pipe(prompt, max_new_tokens=300, temperature=0.01, return_full_text=False)[0]['generated_text'].strip()
-        return response
+
+    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    response = client.chat.completions.create(
+        model=os.getenv("AUTOTOM_ADJUSTMENT_MODEL", "gpt-4o"),
+        messages=messages,
+        temperature=0,
+    )
+    return response.choices[0].message.content
 
 
 def initial_model_proposal(question, inference_var, nested, contains_utterance):

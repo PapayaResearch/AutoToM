@@ -6,21 +6,32 @@ import numpy as np
 from .utils import *
 import openai
 import os
+import transformers
+import torch
+import threading
 
-current_model_name = os.environ['CURRENT_MODEL_NAME']
-from .utils import pipeline
-# pipeline = transformers.pipeline(
-#     "text-generation",
-#     model=current_model_name,
-#     model_kwargs={"torch_dtype": torch.bfloat16},
-#     device_map="auto",
-#     trust_remote_code=True,
-#     # max_num_batched_tokens=40000,
-#     # token=A,
-# )
+_local_model = None
+_local_tokenizer = None
+_local_model_id = None
+_local_model_lock = threading.Lock()
 
-model = pipeline.model
-tokenizer = pipeline.tokenizer
+
+def _get_local_model_and_tokenizer(model_id: str):
+    global _local_model, _local_tokenizer, _local_model_id
+    with _local_model_lock:
+        if _local_model is not None and _local_model_id == model_id:
+            return _local_model, _local_tokenizer
+        local_pipe = transformers.pipeline(
+            "text-generation",
+            model=model_id,
+            model_kwargs={"torch_dtype": torch.bfloat16},
+            device_map="auto",
+            trust_remote_code=True,
+        )
+        _local_model = local_pipe.model
+        _local_tokenizer = local_pipe.tokenizer
+        _local_model_id = model_id
+    return _local_model, _local_tokenizer
 
 cost_of_estimating_likelihood = 0.0
 times_of_estimating = 0
@@ -37,7 +48,7 @@ def get_likelihood(
     info,
     statement,
     dataset_name,
-    model="gpt-4.1-nano",
+    model="gpt-4o",
     verbose=False,
     world_rules=None,
     variable=None,
@@ -60,7 +71,7 @@ def get_likelihood(
 def get_likelihood_general(
     info,
     statement,
-    model="gpt-4.1-nano",
+    model="gpt-4o",
     verbose=False,
     world_rules=None,
     variable=None,
@@ -239,21 +250,21 @@ B) Unlikely."""
 def llama_likelihood_request(
     prompt, model_id="meta-llama/Meta-Llama-3.1-8B-Instruct", max_tokens=200
 ):
-    API_TOKEN = ""  # Put your API token here
+    local_model, tokenizer = _get_local_model_and_tokenizer(model_id)
 
     def compute_prob_of_string(inp, answer_tokens):
         inputs = tokenizer.encode(inp, add_special_tokens=False)
-        inputs = torch.tensor([inputs], dtype=torch.long).to(model.device)
+        inputs = torch.tensor([inputs], dtype=torch.long).to(local_model.device)
         answer_tokens = tokenizer.encode(answer_tokens, add_special_tokens=False)
         final_prob = 1.0
         with torch.no_grad():
             for token in answer_tokens:
-                outputs = model(input_ids=inputs)
+                outputs = local_model(input_ids=inputs)
                 logits = outputs.logits[0, -1, :]
                 probs = torch.softmax(logits, dim=-1)
                 probs = probs[token].item()
                 final_prob *= probs
-                next_input = torch.tensor([[token]], device=model.device)
+                next_input = torch.tensor([[token]], device=local_model.device)
                 inputs = torch.cat([inputs, next_input], dim=1)
         return final_prob
 
@@ -277,7 +288,7 @@ def get_likelihood_test(prompt, verbose=True):
         messages=[
             {"role": "system", "content": prompt},
         ],
-        model="gpt-4.1-nano",
+        model="gpt-4o",
         logprobs=True,
         top_p=0,
         top_logprobs=5,
